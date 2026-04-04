@@ -9,6 +9,6 @@ RUN uv sync --no-dev
 
 COPY . .
 
-EXPOSE 5000
+EXPOSE 8000
 
-CMD ["uv", "run", "run.py"]
+CMD ["uv", "run", "python", "run.py"]
