@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "5000:5000"
+      - "8000:8000"
     environment:
       DATABASE_NAME: hackathon_db
       DATABASE_HOST: db
