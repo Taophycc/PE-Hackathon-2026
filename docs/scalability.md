@@ -36,7 +36,8 @@ k6 run tests/load/k6_baseline.js
 | Error rate | 0% |
 
 ### Screenshot
-![k6 load test output](<Screenshot 2026-04-05 at 00.12.51.png>)
+<img width="1215" height="903" alt="Screenshot 2026-04-05 at 00 12 51" src="https://github.com/user-attachments/assets/127275ad-92a9-4c7d-a811-861281108fab" />
+
 
 ---
 
