@@ -247,6 +247,9 @@ Tests use SQLite; production uses PostgreSQL. Differences to be aware of:
 | Wrong HTTP method | Flask 405 handler | 405 `{"error": "Method not allowed"}` |
 | Unhandled exception anywhere | Flask 500 handler | 500 `{"error": "Internal server error"}` |
 
+<img width="471" height="51" alt="Screenshot 2026-04-04 at 21 33 12" src="https://github.com/user-attachments/assets/4c29f1b4-6f05-4b37-87e8-40a870f708ae" />
+
+
 ### Gap: no retry on DB failure
 
 The current code has no reconnect logic. If the database becomes temporarily unavailable (brief restart, network blip), every request fails with a 500 until the DB comes back. For production resilience, consider:
@@ -288,6 +291,7 @@ docker ps
 curl http://localhost:5000/health
 # → {"status": "ok"}
 ```
+<img width="1136" height="659" alt="Screenshot 2026-04-04 at 21 29 15" src="https://github.com/user-attachments/assets/c60c2b96-5cb7-4e81-873e-99b56aed2dfc" />
 
 `restart: always` means Docker restarts the container immediately on any exit, regardless of exit code. This covers:
 - Application crashes (unhandled exceptions that exit the process)
