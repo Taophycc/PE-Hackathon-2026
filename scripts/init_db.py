@@ -1,24 +1,16 @@
-"""Run once to create database tables: uv run scripts/init_db.py"""
-from dotenv import load_dotenv
+"""Run once to create database tables: uv run python scripts/init_db.py"""
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-load_dotenv()
+from app import create_app
+from app.database import db
+from app.models.user import User
+from app.models.link import Link
+from app.models.event import Event
 
-from app.database import db  # noqa: E402
-from app.models.link import Link  # noqa: E402
-from peewee import PostgresqlDatabase  # noqa: E402
-import os  # noqa: E402
+app = create_app()
 
-database = PostgresqlDatabase(
-    os.environ.get("DATABASE_NAME", "hackathon_db"),
-    host=os.environ.get("DATABASE_HOST", "localhost"),
-    port=int(os.environ.get("DATABASE_PORT", 5432)),
-    user=os.environ.get("DATABASE_USER", "postgres"),
-    password=os.environ.get("DATABASE_PASSWORD", "postgres"),
-)
-db.initialize(database)
-
-db.connect()
-db.create_tables([Link], safe=True)
-db.close()
-
-print("Tables created successfully.")
+with app.app_context():
+    db.create_tables([User, Link, Event], safe=True)
+    print("Tables created: users, urls, events")
