@@ -6,15 +6,17 @@
 
 | Tier | Requirement | Evidence | Screenshot |
 |------|-------------|----------|------------|
-| Bronze | `/health` endpoint working | [Section 9](#9-failure-modes) | <!-- Add /health curl screenshot --> |
+| Bronze | `/health` endpoint working | [Section 9](#9-failure-modes) |1<img width="954" height="524" alt="image" src="https://github.com/user-attachments/assets/71cb79f6-d1c6-4517-8751-24a38cbf025b" />
+
 | Bronze | Unit tests + pytest collection | [Section 1](#1-how-to-run-tests-locally) | <!-- Add pytest output screenshot --> |
-| Bronze | CI workflow configured | [Section 5](#5-github-actions-cicd) | <!-- Add GitHub Actions screenshot --> |
-| Silver | 50%+ test coverage | [Section 4](#4-coverage-map) | <!-- Add coverage report screenshot --> |
-| Silver | Integration/API tests | [Section 2](#2-test-architecture) | <!-- Add test run screenshot --> |
+| Bronze | CI workflow configured | [Section 5](#5-github-actions-cicd) |<img width="1358" height="640" alt="image" src="https://github.com/user-attachments/assets/948be36e-5d56-42ab-8557-01136b87b32b" />|
+| Silver | 50%+ test coverage | [Section 4](#4-coverage-map) | cid:ii_mnlwcc6g2<img width="1046" height="742" alt="image" src="https://github.com/user-attachments/assets/afb497ee-a5be-4256-9a01-0cbeee8c007a" />|
+| Silver | Integration/API tests | [Section 2](#2-test-architecture) | <img width="732" height="239" alt="Screenshot 2026-04-05 at 07 17 39" src="https://github.com/user-attachments/assets/0314a259-33da-48a1-9531-503c360e2ad1" />
+|
 | Silver | Error handling documented | [Section 9](#9-failure-modes) | <!-- Add error response screenshot --> |
 | Gold | 70%+ coverage gate in CI | [Section 5](#5-github-actions-cicd) | <!-- Add CI pass screenshot --> |
 | Gold | Structured error responses | [Section 9](#9-failure-modes) | <!-- Add structured error screenshot --> |
-| Gold | Service restart after failure | [Section 10](#10-chaos-mode--docker-restart-policy) | <!-- Add chaos demo screenshot --> |
+| Gold | Service restart after failure | [Section 10](#10-chaos-mode--docker-restart-policy) | <img width="1136" height="659" alt="Screenshot 2026-04-04 at 21 29 15" src="https://github.com/user-attachments/assets/c60c2b96-5cb7-4e81-873e-99b56aed2dfc" /> |
 | Gold | Failure modes documented | [Section 9](#9-failure-modes) | — |
 
 ---
