@@ -152,6 +152,38 @@ docker compose up --build -d
 
 ---
 
+## Artifacts & Submissions
+
+| Quest | Artifact | Location |
+|-------|----------|----------|
+| Reliability — All Tiers | Documentation + screenshots | [`docs/reliability.md`](docs/reliability.md) |
+| Scalability — All Tiers | Documentation + k6 results + screenshots | [`docs/scalability.md`](docs/scalability.md) |
+| Scalability — Load test scripts | k6 scripts (50, 200, 500 VUs) | [`tests/load/`](tests/load/) |
+| CI/CD Pipeline | GitHub Actions workflow | [`.github/workflows/`](.github/workflows/) |
+| Live Deployment | DigitalOcean Droplet | `http://206.189.59.175:8000` |
+
+---
+
+## AI Usage
+
+We used [Claude Code](https://claude.com/claude-code) (Anthropic's CLI coding assistant, powered by Claude Sonnet) as a pair programming tool.
+
+**How we used it:**
+- Debugging Docker and Nginx configuration issues
+- Answering questions about connection pooling, Redis caching, and Gunicorn workers
+- Helping structure documentation in `docs/scalability.md`
+
+**What we built ourselves:**
+- All architectural decisions and quest strategy
+- Implemented models, routes, and database setup
+- Set up CI/CD pipeline and branch protection rules
+- Running k6 load tests, capturing results, and documenting findings
+- Redis caching implementation and Docker Compose scaling setup
+- DigitalOcean Droplet provisioning and deployment
+- All PR reviews and merges
+
+---
+
 ## Team
 
 Built by Taofeek and DGbolaga for MLH PE Hackathon 2026.
