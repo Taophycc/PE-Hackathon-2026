@@ -40,19 +40,36 @@ def list_events():
 @events_bp.route("/events", methods=["POST"])
 def create_event():
     data = request.get_json(silent=True)
-    if not data:
-        return jsonify(error="Missing request body"), 400
+    if not data or not isinstance(data, dict):
+        return jsonify(error="Request body must be a JSON object"), 400
     if "url_id" not in data or "event_type" not in data:
         return jsonify(error="Missing required fields: url_id, event_type"), 400
 
+    try:
+        url_id = int(data["url_id"])
+    except (TypeError, ValueError):
+        return jsonify(error="url_id must be an integer"), 400
+
+    event_type = str(data["event_type"]).strip()
+    if not event_type:
+        return jsonify(error="event_type cannot be empty"), 400
+
     details = data.get("details")
-    if details is not None and not isinstance(details, str):
-        details = json.dumps(details)
+    if details is not None:
+        if isinstance(details, str):
+            try:
+                json.loads(details)
+            except (ValueError, TypeError):
+                return jsonify(error="details must be a valid JSON object"), 400
+        elif not isinstance(details, dict):
+            return jsonify(error="details must be a JSON object"), 400
+        else:
+            details = json.dumps(details)
 
     event = Event.create(
-        url_id=data["url_id"],
+        url_id=url_id,
         user_id=data.get("user_id"),
-        event_type=data["event_type"],
+        event_type=event_type,
         timestamp=_now(),
         details=details,
     )

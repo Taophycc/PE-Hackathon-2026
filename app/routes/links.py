@@ -48,6 +48,7 @@ def shorten():
 def redirect_link(short_code):
     cached_url = cache_get(f"link:{short_code}")
     if cached_url:
+        _track_click(short_code)
         return redirect(cached_url, code=302)
 
     try:
@@ -59,7 +60,26 @@ def redirect_link(short_code):
         return jsonify(error="This link has been deactivated"), 410
 
     cache_set(f"link:{short_code}", link.original_url)
+    _track_click(short_code, link_id=link.id)
     return redirect(link.original_url, code=302)
+
+
+def _track_click(short_code, link_id=None):
+    try:
+        from app.models.event import Event
+        from datetime import datetime, timezone
+        if link_id is None:
+            link = Link.get(Link.short_code == short_code)
+            link_id = link.id
+        Event.create(
+            url_id=link_id,
+            user_id=None,
+            event_type="click",
+            timestamp=datetime.now(timezone.utc),
+            details=None,
+        )
+    except Exception:
+        pass
 
 
 @links_bp.route("/links", methods=["GET"])

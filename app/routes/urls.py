@@ -4,9 +4,18 @@ from flask import Blueprint, jsonify, request
 from peewee import IntegrityError
 
 from app.cache import cache_delete
+from app.models.event import Event
 from app.models.link import Link, generate_short_code
 
 urls_bp = Blueprint("urls", __name__)
+
+
+def _url_dict(link):
+    d = link.to_dict()
+    d["click_count"] = Event.select().where(
+        (Event.url_id == link.id) & (Event.event_type == "click")
+    ).count()
+    return d
 
 
 def _now():
@@ -19,12 +28,15 @@ def list_urls():
 
     user_id = request.args.get("user_id", type=int)
     is_active = request.args.get("is_active")
+    search = request.args.get("q") or request.args.get("search")
 
     if user_id is not None:
         query = query.where(Link.user_id == user_id)
     if is_active is not None:
         active = is_active.lower() in ("true", "1", "yes")
         query = query.where(Link.is_active == active)
+    if search:
+        query = query.where(Link.original_url.contains(search))
 
     page = request.args.get("page", type=int)
     per_page = request.args.get("per_page", type=int)
@@ -33,7 +45,7 @@ def list_urls():
     elif per_page:
         query = query.limit(per_page)
 
-    return jsonify([l.to_dict() for l in query]), 200
+    return jsonify([_url_dict(l) for l in query]), 200
 
 
 @urls_bp.route("/urls/<int:url_id>", methods=["GET"])
@@ -42,13 +54,15 @@ def get_url(url_id):
         link = Link.get_by_id(url_id)
     except Link.DoesNotExist:
         return jsonify(error="Not found"), 404
-    return jsonify(link.to_dict()), 200
+    return jsonify(_url_dict(link)), 200
 
 
 @urls_bp.route("/urls", methods=["POST"])
 def create_url():
     data = request.get_json(silent=True)
-    if not data or "original_url" not in data:
+    if not data or not isinstance(data, dict):
+        return jsonify(error="Request body must be a JSON object"), 400
+    if "original_url" not in data:
         return jsonify(error="Missing required field: original_url"), 400
 
     original_url = data["original_url"].strip()
@@ -78,7 +92,7 @@ def create_url():
         created_at=now,
         updated_at=now,
     )
-    return jsonify(link.to_dict()), 201
+    return jsonify(_url_dict(link)), 201
 
 
 @urls_bp.route("/urls/<int:url_id>", methods=["PUT"])
@@ -102,7 +116,7 @@ def update_url(url_id):
 
     link.updated_at = _now()
     link.save()
-    return jsonify(link.to_dict()), 200
+    return jsonify(_url_dict(link)), 200
 
 
 @urls_bp.route("/urls/<int:url_id>", methods=["DELETE"])

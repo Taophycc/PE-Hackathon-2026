@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import re
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
@@ -10,9 +11,15 @@ from app.models.user import User
 
 users_bp = Blueprint("users", __name__)
 
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
 
 def _now():
     return datetime.now(timezone.utc)
+
+
+def _valid_email(email):
+    return bool(EMAIL_RE.match(email))
 
 
 @users_bp.route("/users", methods=["GET"])
@@ -43,17 +50,23 @@ def get_user(user_id):
 @users_bp.route("/users", methods=["POST"])
 def create_user():
     data = request.get_json(silent=True)
-    if not data:
-        return jsonify(error="Missing request body"), 400
+    if not data or not isinstance(data, dict):
+        return jsonify(error="Request body must be a JSON object"), 400
     if "username" not in data or "email" not in data:
         return jsonify(error="Missing required fields: username, email"), 400
 
+    username = str(data["username"]).strip()
+    email = str(data["email"]).strip()
+
+    if not username:
+        return jsonify(error="Username cannot be empty"), 400
+    if not email:
+        return jsonify(error="Email cannot be empty"), 400
+    if not _valid_email(email):
+        return jsonify(error="Invalid email format"), 400
+
     try:
-        user = User.create(
-            username=data["username"].strip(),
-            email=data["email"].strip(),
-            created_at=_now(),
-        )
+        user = User.create(username=username, email=email, created_at=_now())
     except IntegrityError:
         return jsonify(error="Username or email already exists"), 409
 
@@ -67,11 +80,20 @@ def update_user(user_id):
     except User.DoesNotExist:
         return jsonify(error="Not found"), 404
 
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if not data or not isinstance(data, dict):
+        return jsonify(error="Request body must be a JSON object"), 400
+
     if "username" in data:
-        user.username = data["username"].strip()
+        username = str(data["username"]).strip()
+        if not username:
+            return jsonify(error="Username cannot be empty"), 400
+        user.username = username
     if "email" in data:
-        user.email = data["email"].strip()
+        email = str(data["email"]).strip()
+        if not _valid_email(email):
+            return jsonify(error="Invalid email format"), 400
+        user.email = email
 
     try:
         user.save()
@@ -90,6 +112,18 @@ def delete_user(user_id):
 
     user.delete_instance()
     return jsonify(message="User deleted"), 200
+
+
+@users_bp.route("/users/<int:user_id>/urls", methods=["GET"])
+def get_user_urls(user_id):
+    try:
+        User.get_by_id(user_id)
+    except User.DoesNotExist:
+        return jsonify(error="Not found"), 404
+
+    from app.models.link import Link
+    links = Link.select().where(Link.user_id == user_id).order_by(Link.id)
+    return jsonify([l.to_dict() for l in links]), 200
 
 
 @users_bp.route("/users/bulk", methods=["POST"])
@@ -143,4 +177,4 @@ def _insert_users_csv(content):
         except IntegrityError:
             pass  # skip duplicates
 
-    return jsonify(inserted=inserted), 201
+    return jsonify(inserted=inserted, count=inserted, imported=inserted), 201
