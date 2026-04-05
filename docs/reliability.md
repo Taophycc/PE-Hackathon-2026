@@ -1,5 +1,21 @@
 # Reliability Engineering — Test Suite & CI Documentation
 
+---
+
+## Quest Summary
+
+| Tier | Requirement | Evidence | Screenshot |
+|------|-------------|----------|------------|
+| Bronze | `/health` endpoint working | [Section 9](#9-failure-modes) | <!-- Add /health curl screenshot --> |
+| Bronze | Unit tests + pytest collection | [Section 1](#1-how-to-run-tests-locally) | <!-- Add pytest output screenshot --> |
+| Bronze | CI workflow configured | [Section 5](#5-github-actions-cicd) | <!-- Add GitHub Actions screenshot --> |
+| Silver | 50%+ test coverage | [Section 4](#4-coverage-map) | <!-- Add coverage report screenshot --> |
+| Silver | Integration/API tests | [Section 2](#2-test-architecture) | <!-- Add test run screenshot --> |
+| Silver | Error handling documented | [Section 9](#9-failure-modes) | <!-- Add error response screenshot --> |
+| Gold | 70%+ coverage gate in CI | [Section 5](#5-github-actions-cicd) | <!-- Add CI pass screenshot --> |
+| Gold | Structured error responses | [Section 9](#9-failure-modes) | <!-- Add structured error screenshot --> |
+| Gold | Service restart after failure | [Section 10](#10-chaos-mode--docker-restart-policy) | <!-- Add chaos demo screenshot --> |
+| Gold | Failure modes documented | [Section 9](#9-failure-modes) | — |
 
 ---
 
