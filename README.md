@@ -126,6 +126,22 @@ See [`docs/scalability.md`](docs/scalability.md) for full documentation and resu
 
 ---
 
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_NAME` | `hackathon_db` | PostgreSQL database name |
+| `DATABASE_HOST` | `localhost` | PostgreSQL host |
+| `DATABASE_PORT` | `5432` | PostgreSQL port |
+| `DATABASE_USER` | `postgres` | PostgreSQL user |
+| `DATABASE_PASSWORD` | _(empty)_ | PostgreSQL password |
+| `REDIS_HOST` | `localhost` | Redis host |
+| `REDIS_PORT` | `6379` | Redis port |
+
+All variables are set in `docker-compose.yml` for containerised deployment. For local development, copy `.env.example` to `.env` and adjust as needed.
+
+---
+
 ## Troubleshooting
 
 **Containers not starting**
