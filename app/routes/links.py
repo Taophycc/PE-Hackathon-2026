@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, redirect, request
 
+from app.cache import cache_delete, cache_get, cache_set
 from app.models.link import Link, generate_short_code
 
 links_bp = Blueprint("links", __name__)
@@ -45,6 +46,10 @@ def shorten():
 
 @links_bp.route("/<short_code>", methods=["GET"])
 def redirect_link(short_code):
+    cached_url = cache_get(f"link:{short_code}")
+    if cached_url:
+        return redirect(cached_url, code=302)
+
     try:
         link = Link.get(Link.short_code == short_code)
     except Link.DoesNotExist:
@@ -53,6 +58,7 @@ def redirect_link(short_code):
     if not link.is_active:
         return jsonify(error="This link has been deactivated"), 410
 
+    cache_set(f"link:{short_code}", link.original_url)
     return redirect(link.original_url, code=302)
 
 
@@ -72,4 +78,5 @@ def deactivate_link(short_code):
     link.is_active = False
     link.updated_at = datetime.now(timezone.utc)
     link.save()
+    cache_delete(f"link:{short_code}")
     return jsonify(message="Link deactivated"), 200

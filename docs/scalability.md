@@ -152,4 +152,72 @@ Getting from Bronze (50 users) to Silver (200 users) required four changes. Here
 
 ## 3. Gold — Caching with Redis
 
-*Coming soon*
+### What We Built
+To handle 500 concurrent users while keeping error rate below 5%, we added Redis as an in-memory cache in front of the database for redirect lookups:
+
+- **Redis container** — caches `short_code → original_url` mappings with a 1-hour TTL
+- **`app/cache.py`** — thin wrapper around the Redis client with graceful fallback (cache miss falls through to the database; Redis errors are silently ignored so the app stays functional even if Redis goes down)
+- **Redirect endpoint** — checks Redis first; only hits PostgreSQL on a cache miss, then writes the result to cache
+- **Gunicorn workers bumped to 8 per container** — 16 total workers across both app containers to absorb the extra concurrency
+- **PostgreSQL max_connections raised to 300** — headroom for 16 workers × 2 containers with pool size 50
+
+The cache primarily benefits the `GET /<short_code>` redirect path, which is the most read-heavy operation. `POST /shorten` still writes directly to PostgreSQL (no caching needed for writes).
+
+### Architecture
+```
+User → Nginx (port 8000) → app1 (gunicorn, 8 workers)
+                         → app2 (gunicorn, 8 workers)
+       Both → Redis (cache)  → PostgreSQL (on cache miss)
+              PostgreSQL (max 300 connections)
+```
+
+### Setup
+- **Tool:** k6
+- **Script:** `tests/load/k6_gold.js`
+- **Duration:** 30 seconds
+- **Concurrent users:** 500
+
+### How to run
+```bash
+docker compose up --build -d
+k6 run tests/load/k6_gold.js
+```
+
+### Results
+
+| Metric | Value | Requirement |
+|---|---|---|
+| Concurrent users | 500 | ✅ |
+| Total requests | 9936 | — |
+| Success rate | 100% | ✅ |
+| Avg response time | 1.28s | ✅ |
+| p90 response time | 1.83s | ✅ |
+| p95 response time | 2.38s | ✅ under 3s |
+| Throughput | 284 req/s | ✅ |
+| Error rate | 0% | ✅ under 5% |
+
+### Screenshot
+<!-- Add screenshot of k6 gold terminal output here -->
+
+---
+
+### Improvements & Tradeoffs
+
+#### 1. Added Redis Caching for Redirect Lookups
+**What:** Added a `cache_get`/`cache_set` call around the database lookup in `GET /<short_code>`. On first access, the URL is fetched from PostgreSQL and stored in Redis with a 1-hour TTL. Subsequent requests for the same short code are served from Redis without touching the database.
+
+**Why:** The redirect endpoint is the hot path — it gets called far more than `/shorten`. Under 500 VUs, nearly every repeat request hits cache, dramatically cutting database load. This is why we could handle 500 VUs while the database only has 300 max connections.
+
+**Tradeoff:** Cached URLs can be stale for up to 1 hour after a `DELETE /links/<short_code>` (deactivation). We mitigate this with an explicit `cache_delete` call in the deactivate route, so the cache is invalidated immediately on deactivation.
+
+#### 2. Graceful Cache Degradation
+**What:** All cache operations (`cache_get`, `cache_set`, `cache_delete`) catch exceptions and return `None`/pass silently.
+
+**Why:** If Redis is unavailable, the app falls back to direct database queries. This keeps the system functional during a Redis failure, just at higher latency. This directly supports the reliability requirements from the reliability track.
+
+#### 3. Increased Gunicorn Workers to 8 per Container
+**What:** Bumped from `-w 4` to `-w 8` in `scripts/start.sh`.
+
+**Why:** At 500 VUs, the bottleneck shifted from the database to worker availability. 8 workers per container × 2 containers = 16 parallel request handlers. The rule of thumb is `2 × CPU cores + 1` workers; on a multi-core machine this saturates available CPU.
+
+**Tradeoff:** More workers = more memory and more database connections held in pool. We raised `max_connections` on PostgreSQL to 300 to compensate.

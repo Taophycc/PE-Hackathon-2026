@@ -11,4 +11,6 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uv", "run", "gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "run:app"]
+RUN chmod +x scripts/start.sh
+
+CMD ["bash", "scripts/start.sh"]
