@@ -32,11 +32,13 @@ def shorten():
         else:
             return jsonify(error="Could not generate unique short code"), 500
 
+    now = datetime.now(timezone.utc)
     link = Link.create(
         short_code=short_code,
         original_url=original_url,
         is_active=True,
-        created_at=datetime.now(timezone.utc),
+        created_at=now,
+        updated_at=now,
     )
     return jsonify(link.to_dict()), 201
 
@@ -68,5 +70,6 @@ def deactivate_link(short_code):
         return jsonify(error="Short link not found"), 404
 
     link.is_active = False
+    link.updated_at = datetime.now(timezone.utc)
     link.save()
     return jsonify(message="Link deactivated"), 200
