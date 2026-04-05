@@ -1,192 +1,140 @@
-# MLH PE Hackathon — Flask + Peewee + PostgreSQL Template
+# MLH PE Hackathon 2026 — URL Shortener
 
-A minimal hackathon starter template. You get the scaffolding and database wiring — you build the models, routes, and CSV loading logic.
+A production-grade URL shortener built for the MLH PE Hackathon 2026. Built on Flask + PostgreSQL, horizontally scaled with Nginx and Redis caching, with full CI/CD and chaos-tested reliability.
 
-**Stack:** Flask · Peewee ORM · PostgreSQL · uv
+**Stack:** Flask · Peewee ORM · PostgreSQL · Redis · Nginx · Gunicorn · Docker · k6
 
-## **Important**
+---
 
-You need to work with around the seed files that you can find in [MLH PE Hackathon](https://mlh-pe-hackathon.com) platform. This will help you build the schema for the database and have some data to do some testing and submit your project for judging. If you need help with this, reach out on Discord or on the Q&A tab on the platform.
+## API Routes
 
-## Prerequisites
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check |
+| `POST` | `/shorten` | Create a short URL |
+| `GET` | `/<short_code>` | Redirect to original URL (Redis cached) |
+| `GET` | `/links` | List all active links |
+| `DELETE` | `/links/<short_code>` | Deactivate a short link |
 
-- **uv** — a fast Python package manager that handles Python versions, virtual environments, and dependencies automatically.
-  Install it with:
-  ```bash
-  # macOS / Linux
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-
-  # Windows (PowerShell)
-  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-  ```
-  For other methods see the [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/).
-- PostgreSQL running locally (you can use Docker or a local instance)
-
-## uv Basics
-
-`uv` manages your Python version, virtual environment, and dependencies automatically — no manual `python -m venv` needed.
-
-| Command | What it does |
-|---------|--------------|
-| `uv sync` | Install all dependencies (creates `.venv` automatically) |
-| `uv run <script>` | Run a script using the project's virtual environment |
-| `uv add <package>` | Add a new dependency |
-| `uv remove <package>` | Remove a dependency |
-
-## Quick Start
+### Example
 
 ```bash
-# 1. Clone the repo
-git clone <repo-url> && cd mlh-pe-hackathon
+# Shorten a URL
+curl -X POST http://localhost:8000/shorten \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'
+# → {"short_code": "aB3xZ9", "original_url": "https://example.com", ...}
 
-# 2. Install dependencies
-uv sync
-
-# 3. Create the database
-createdb hackathon_db
-
-# 4. Configure environment
-cp .env.example .env   # edit if your DB credentials differ
-
-# 5. Run the server
-uv run run.py
-
-# 6. Verify
-curl http://localhost:5000/health
-# → {"status":"ok"}
+# Redirect
+curl -L http://localhost:8000/aB3xZ9
 ```
+
+---
+
+## Running the App
+
+```bash
+# Start all services (Nginx, app1, app2, Redis, PostgreSQL)
+docker compose up --build -d
+
+# Verify
+curl http://localhost:8000/health
+# → {"status": "ok"}
+```
+
+---
+
+## Architecture
+
+```
+Client
+  │
+  ▼
+Nginx (port 8000)
+  ├── app1 (Gunicorn, 8 workers)
+  └── app2 (Gunicorn, 8 workers)
+        │
+        ├── Redis (cache — redirect lookups)
+        └── PostgreSQL (primary store)
+```
+
+---
+
+## Quest Tracks
+
+### Reliability Engineering
+
+> Goal: Build a system that handles failures gracefully and recovers automatically.
+
+| Level | What We Did |
+|-------|-------------|
+| Bronze | `/health` endpoint, CI pipeline (GitHub Actions), 53 passing tests |
+| Silver | 50%+ test coverage gate in CI, deploy only on green, structured error handling |
+| Gold | 70%+ test coverage, `restart: always` chaos resilience, graceful Redis fallback |
+
+CI runs on every PR — tests must pass and coverage must be ≥70% before merge is allowed.
+
+See [`docs/reliability.md`](docs/reliability.md) for full documentation.
+
+---
+
+### Scalability Engineering
+
+> Goal: Handle increasing load without degrading performance.
+
+| Level | Setup | VUs | Success Rate | p95 Latency |
+|-------|-------|-----|-------------|-------------|
+| Bronze | Single Flask process | 50 | 100% | 2.81s |
+| Silver | Nginx + 2 app containers + connection pooling | 200 | 97.8% | 1.78s |
+| Gold | + Redis caching + 8 Gunicorn workers per container | 500 | 100% | 2.38s |
+
+Load testing done with [k6](https://k6.io). Scripts in `tests/load/`.
+
+See [`docs/scalability.md`](docs/scalability.md) for full documentation and results.
+
+---
 
 ## Project Structure
 
 ```
-mlh-pe-hackathon/
 ├── app/
 │   ├── __init__.py          # App factory (create_app)
-│   ├── database.py          # DatabaseProxy, BaseModel, connection hooks
+│   ├── cache.py             # Redis cache (get/set/delete with fallback)
+│   ├── database.py          # PooledPostgresqlDatabase, connection hooks
 │   ├── models/
-│   │   └── __init__.py      # Import your models here
+│   │   ├── link.py          # Link model (short_code, original_url, is_active)
+│   │   ├── user.py          # User model
+│   │   └── event.py         # Event model (click tracking)
 │   └── routes/
-│       └── __init__.py      # register_routes() — add blueprints here
-├── .env.example             # DB connection template
-├── .gitignore               # Python + uv gitignore
-├── .python-version          # Pin Python version for uv
-├── pyproject.toml           # Project metadata + dependencies
-├── run.py                   # Entry point: uv run run.py
-└── README.md
+│       └── links.py         # All URL shortener routes
+├── docs/
+│   ├── reliability.md       # Reliability quest documentation
+│   └── scalability.md       # Scalability quest documentation + k6 results
+├── scripts/
+│   ├── init_db.py           # Creates DB tables on startup
+│   └── start.sh             # Container entrypoint (migrate + gunicorn)
+├── tests/
+│   ├── conftest.py          # SQLite swap for tests
+│   └── load/
+│       ├── k6_baseline.js   # 50 VUs
+│       ├── k6_silver.js     # 200 VUs
+│       └── k6_gold.js       # 500 VUs
+├── docker-compose.yml       # All 5 services
+├── nginx.conf               # Load balancer config
+└── Dockerfile
 ```
 
-## How to Add a Model
+---
 
-1. Create a file in `app/models/`, e.g. `app/models/product.py`:
+## Running Tests
 
-```python
-from peewee import CharField, DecimalField, IntegerField
-
-from app.database import BaseModel
-
-
-class Product(BaseModel):
-    name = CharField()
-    category = CharField()
-    price = DecimalField(decimal_places=2)
-    stock = IntegerField()
+```bash
+uv sync --dev
+uv run pytest --cov=app --cov-report=term-missing
 ```
 
-2. Import it in `app/models/__init__.py`:
+---
 
-```python
-from app.models.product import Product
-```
+## Team
 
-3. Create the table (run once in a Python shell or a setup script):
-
-```python
-from app.database import db
-from app.models.product import Product
-
-db.create_tables([Product])
-```
-
-## How to Add Routes
-
-1. Create a blueprint in `app/routes/`, e.g. `app/routes/products.py`:
-
-```python
-from flask import Blueprint, jsonify
-from playhouse.shortcuts import model_to_dict
-
-from app.models.product import Product
-
-products_bp = Blueprint("products", __name__)
-
-
-@products_bp.route("/products")
-def list_products():
-    products = Product.select()
-    return jsonify([model_to_dict(p) for p in products])
-```
-
-2. Register it in `app/routes/__init__.py`:
-
-```python
-def register_routes(app):
-    from app.routes.products import products_bp
-    app.register_blueprint(products_bp)
-```
-
-## How to Load CSV Data
-
-```python
-import csv
-from peewee import chunked
-from app.database import db
-from app.models.product import Product
-
-def load_csv(filepath):
-    with open(filepath, newline="") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-
-    with db.atomic():
-        for batch in chunked(rows, 100):
-            Product.insert_many(batch).execute()
-```
-
-## Useful Peewee Patterns
-
-```python
-from peewee import fn
-from playhouse.shortcuts import model_to_dict
-
-# Select all
-products = Product.select()
-
-# Filter
-cheap = Product.select().where(Product.price < 10)
-
-# Get by ID
-p = Product.get_by_id(1)
-
-# Create
-Product.create(name="Widget", category="Tools", price=9.99, stock=50)
-
-# Convert to dict (great for JSON responses)
-model_to_dict(p)
-
-# Aggregations
-avg_price = Product.select(fn.AVG(Product.price)).scalar()
-total = Product.select(fn.SUM(Product.stock)).scalar()
-
-# Group by
-from peewee import fn
-query = (Product
-         .select(Product.category, fn.COUNT(Product.id).alias("count"))
-         .group_by(Product.category))
-```
-
-## Tips
-
-- Use `model_to_dict` from `playhouse.shortcuts` to convert model instances to dictionaries for JSON responses.
-- Wrap bulk inserts in `db.atomic()` for transactional safety and performance.
-- The template uses `teardown_appcontext` for connection cleanup, so connections are closed even when requests fail.
-- Check `.env.example` for all available configuration options.
+Built by Taofeek and DGbolaga for MLH PE Hackathon 2026.

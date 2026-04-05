@@ -51,11 +51,8 @@ To handle 200 concurrent users, we moved from a single Flask process to a horizo
 
 This was all configured in `docker-compose.yml` and `nginx.conf`. Running `docker compose up --build -d` brings up all 4 containers automatically.
 
-<img width="1133" height="116" alt="Screenshot 2026-04-05 at 01 35 13" src="https://github.com/user-attachments/assets/8d0a0250-7a2f-4b56-8614-4d95b988c2ff" />
-
-
 ### docker compose ps (Silver verification)
-<!-- Add docker compose ps screenshot here -->
+<img width="1133" height="116" alt="Screenshot 2026-04-05 at 01 35 13" src="https://github.com/user-attachments/assets/8d0a0250-7a2f-4b56-8614-4d95b988c2ff" />
 
 ### Architecture
 ```
