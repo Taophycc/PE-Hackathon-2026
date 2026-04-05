@@ -2,7 +2,7 @@
 
 A production-grade URL shortener built for the MLH PE Hackathon 2026. Built on Flask + PostgreSQL, horizontally scaled with Nginx and Redis caching, with full CI/CD and chaos-tested reliability.
 
-**Stack:** Flask · Peewee ORM · PostgreSQL · Redis · Nginx · Gunicorn · Docker · k6
+**Stack:** Flask · Peewee ORM · PostgreSQL · Redis · Nginx · Gunicorn · Docker · k6 · DigitalOcean
 
 ---
 
@@ -132,6 +132,23 @@ See [`docs/scalability.md`](docs/scalability.md) for full documentation and resu
 uv sync --dev
 uv run pytest --cov=app --cov-report=term-missing
 ```
+
+---
+
+## Deployment
+
+The app is deployed on a DigitalOcean Droplet (CentOS 9, 1 vCPU, 1GB RAM, Frankfurt region). All 5 services run via Docker Compose on the server — no managed platform, just a raw Linux VM with Docker installed manually.
+
+The Droplet runs 24/7 independently of any local machine. To deploy updates:
+
+```bash
+ssh root@206.189.59.175
+cd PE-Hackathon-2026
+git pull
+docker compose up --build -d
+```
+
+**Live URL:** `http://206.189.59.175:8000`
 
 ---
 
