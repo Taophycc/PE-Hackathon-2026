@@ -126,6 +126,47 @@ See [`docs/scalability.md`](docs/scalability.md) for full documentation and resu
 
 ---
 
+## Troubleshooting
+
+**Containers not starting**
+```bash
+docker compose logs app1
+docker compose logs nginx
+```
+Check for DB connection errors — the app waits for PostgreSQL to be healthy before starting.
+
+**Nginx "host not found" error**
+Nginx started before app containers were ready. Fix:
+```bash
+docker compose restart nginx
+```
+
+**Port 8000 not responding**
+```bash
+docker compose ps  # check all services are Up
+curl http://localhost:8000/health
+```
+
+**Out of memory on Droplet**
+Add swap space:
+```bash
+fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+```
+
+**Redis connection errors**
+The app degrades gracefully — Redis errors are caught silently and fall back to PostgreSQL. Check Redis is running:
+```bash
+docker compose ps redis
+```
+
+**Database tables missing**
+Tables are created automatically on container start via `scripts/init_db.py`. Force recreate:
+```bash
+docker compose down && docker compose up --build -d
+```
+
+---
+
 ## Running Tests
 
 ```bash
