@@ -51,6 +51,9 @@ To handle 200 concurrent users, we moved from a single Flask process to a horizo
 
 This was all configured in `docker-compose.yml` and `nginx.conf`. Running `docker compose up --build -d` brings up all 4 containers automatically.
 
+<img width="1133" height="116" alt="Screenshot 2026-04-05 at 01 35 13" src="https://github.com/user-attachments/assets/8d0a0250-7a2f-4b56-8614-4d95b988c2ff" />
+
+
 ### docker compose ps (Silver verification)
 <!-- Add docker compose ps screenshot here -->
 
@@ -86,7 +89,7 @@ k6 run tests/load/k6_silver.js
 | Error rate | 2.18% | ✅ |
 
 ### Screenshot
-<!-- Add screenshot of k6 silver terminal output here -->
+<img width="962" height="617" alt="Screenshot 2026-04-05 at 02 22 18" src="https://github.com/user-attachments/assets/3f14b096-183c-4f2e-a55c-38d349afe1e0" />
 
 ---
 
