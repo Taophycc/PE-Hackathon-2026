@@ -42,6 +42,18 @@ k6 run tests/load/k6_baseline.js
 
 ## 2. Silver — Horizontal Scaling with Nginx
 
+### What We Built
+To handle 200 concurrent users, we moved from a single Flask process to a horizontally scaled setup using Docker Compose:
+
+- **2 app containers** (`app1`, `app2`) — each running Gunicorn with 4 workers, giving 8 total worker processes
+- **1 Nginx container** — acts as the load balancer, sitting in front of both app containers and distributing traffic between them using round-robin
+- **1 PostgreSQL container** — shared database with `max_connections=200`
+
+This was all configured in `docker-compose.yml` and `nginx.conf`. Running `docker compose up --build -d` brings up all 4 containers automatically.
+
+### docker compose ps (Silver verification)
+<!-- Add docker compose ps screenshot here -->
+
 ### Architecture
 ```
 User → Nginx (port 8000) → app1 (gunicorn, 4 workers)
