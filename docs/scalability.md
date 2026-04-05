@@ -38,13 +38,103 @@ k6 run tests/load/k6_baseline.js
 ### Screenshot
 <img width="1215" height="903" alt="Screenshot 2026-04-05 at 00 12 51" src="https://github.com/user-attachments/assets/127275ad-92a9-4c7d-a811-861281108fab" />
 
-
 ---
 
 ## 2. Silver — Horizontal Scaling with Nginx
 
+### Architecture
+```
+User → Nginx (port 8000) → app1 (gunicorn, 4 workers)
+                         → app2 (gunicorn, 4 workers)
+       Both → PostgreSQL (max 200 connections)
+```
+
+### Setup
+- **Tool:** k6
+- **Script:** `tests/load/k6_silver.js`
+- **Duration:** 30 seconds
+- **Concurrent users:** 200
+
+### How to run
+```bash
+docker compose up --build -d
+k6 run tests/load/k6_silver.js
+```
+
+### Results
+
+| Metric | Value | Requirement |
+|---|---|---|
+| Concurrent users | 200 | ✅ |
+| Total requests | 6167 | — |
+| Success rate | 97.8% | ✅ |
+| Avg response time | 649ms | ✅ |
+| p90 response time | 1.18s | ✅ |
+| p95 response time | 1.78s | ✅ under 3s |
+| Error rate | 2.18% | ✅ |
+
+### Screenshot
+<!-- Add screenshot of k6 silver terminal output here -->
+
+---
+
+### Improvements & Tradeoffs
+
+Getting from Bronze (50 users) to Silver (200 users) required four changes. Here's what we did and why:
+
+#### 1. Added Nginx as a Load Balancer
+**What:** Added an Nginx container in front of two app instances using round-robin load balancing.
+
+**Why:** A single Flask instance can only handle so many requests at once. Nginx distributes incoming traffic evenly between `app1` and `app2`, effectively doubling capacity.
+
+**Tradeoff:** Adds an extra network hop for every request. Nginx itself can become a bottleneck if not tuned correctly (which we experienced — see below).
+
+---
+
+#### 2. Switched from Flask Dev Server to Gunicorn
+**What:** Replaced `uv run python run.py` with `gunicorn -w 4` in the Dockerfile.
+
+**Why:** Flask's built-in dev server is single-threaded — it handles one request at a time. Under 200 concurrent users, requests queued up and timed out. Gunicorn spawns 4 worker processes per container (8 total across both containers), handling requests truly in parallel.
+
+**Tradeoff:** Gunicorn is a production WSGI server, not part of the core Flask/Peewee/PostgreSQL stack. However it does not replace any of those — it only changes how Flask is served.
+
+**Before (dev server):** p95 = 9.7s, 56% failure rate
+
+**After (gunicorn):** p95 = 1.42s, 12% failure rate
+
+---
+
+#### 3. Added Connection Pooling (Peewee)
+**What:** Switched from `PostgresqlDatabase` to `PooledPostgresqlDatabase` with `max_connections=50`.
+
+**Why:** Without pooling, every request opens a new database connection and closes it when done. Under 200 concurrent users, this means up to 200 simultaneous connection attempts — PostgreSQL's default limit is ~100, so requests start failing with `MaxConnectionsExceeded`.
+
+**Tradeoff:** Connections stay open in the pool even when idle, consuming memory. `stale_timeout=300` cleans up connections unused for 5 minutes to mitigate this.
+
+**Before:** `MaxConnectionsExceeded` errors under load
+
+**After:** Requests wait for an available connection instead of failing
+
+---
+
+#### 4. Increased PostgreSQL Max Connections
+**What:** Added `command: postgres -c max_connections=200` to the db service in `docker-compose.yml`.
+
+**Why:** PostgreSQL's default `max_connections` is 100. With 2 app containers each holding a pool of 50 connections, we need at least 100 — bumping to 200 gives headroom.
+
+**Tradeoff:** Each PostgreSQL connection uses ~5-10MB of shared memory. 200 connections = up to 2GB RAM reserved. Acceptable for a hackathon but in production you'd use PgBouncer as a connection pooler instead.
+
+---
+
+#### 5. Tuned Nginx Worker Connections
+**What:** Set `worker_processes auto` and `worker_connections 2048` in `nginx.conf`, plus enabled HTTP keepalive to the upstream app containers.
+
+**Why:** Default Nginx config handles ~512 connections per worker. Under 200 concurrent users sending multiple requests each, Nginx was dropping connections (`connection reset by peer`).
+
+**Tradeoff:** Higher `worker_connections` increases memory usage per Nginx worker process.
 
 ---
 
 ## 3. Gold — Caching with Redis
 
+*Coming soon*
