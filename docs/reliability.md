@@ -11,6 +11,10 @@
 4. [Coverage Map](#4-coverage-map)
 5. [GitHub Actions CI/CD](#5-github-actions-cicd)
 6. [Bug Fixed During Testing](#6-bug-fixed-during-testing)
+7. [Known Behavioural Quirks](#7-known-behavioural-quirks)
+8. [SQLite vs PostgreSQL Divergence](#8-sqlite-vs-postgresql-divergence)
+9. [Failure Modes](#9-failure-modes)
+10. [Chaos Mode — Docker Restart Policy](#10-chaos-mode--docker-restart-policy)
 
 ---
 
@@ -25,8 +29,8 @@ uv sync --extra dev
 # Run all tests with coverage report
 uv run pytest --cov=app --cov-report=term-missing -v
 
-# Run with the Silver-tier coverage gate (fails if < 50%)
-uv run pytest --cov=app --cov-report=term-missing --cov-fail-under=50 -v
+# Run with the Gold-tier coverage gate (fails if < 70%)
+uv run pytest --cov=app --cov-report=term-missing --cov-fail-under=70 -v
 
 # Run a single file
 uv run pytest tests/test_api.py -v
@@ -47,7 +51,7 @@ tests/
 ├── test_health.py      Bronze: /health endpoint
 ├── test_errors.py      Silver: JSON error handlers (404, 405, 500)
 ├── test_links.py       Bronze: unit tests for generate_short_code()
-├── test_api.py         Silver: integration tests for all routes
+├── test_api.py         Silver/Gold: integration tests for all routes
 └── test_models.py      Silver: model CRUD + constraint tests
 ```
 
@@ -102,7 +106,7 @@ with patch("app.database.PooledPostgresqlDatabase") as MockPG:
 
 ### Trade-off acknowledged
 
-Tests pass on SQLite but the production database is PostgreSQL. The alternative — spinning up a PostgreSQL container in CI — would eliminate the gap but adds complexity and latency. For a hackathon, SQLite is the right trade-off.
+Tests pass on SQLite but the production database is PostgreSQL. We acknowledge this. See [Section 8](#8-sqlite-vs-postgresql-divergence) for specifics. The alternative — spinning up a PostgreSQL container in CI — would eliminate the gap but adds complexity and latency. For a hackathon, SQLite is the right trade-off.
 
 ---
 
@@ -120,7 +124,12 @@ Tests pass on SQLite but the production database is PostgreSQL. The alternative 
 | `app/routes/__init__.py` | register_routes() | all tests |
 | `app/routes/links.py` | all 4 routes, all branches | test_api.py |
 
-**Target coverage:** 50% (Silver tier). The `--cov-fail-under=50` flag in CI enforces this gate.
+**Target coverage:** 70% (Gold tier). The `--cov-fail-under=70` flag in CI enforces this gate.
+
+### Branches intentionally not covered
+
+- **500 from DB unreachable at startup:** Covered via mock (`side_effect=RuntimeError`) in `test_errors.py::test_500_internal_error_returns_json`. Not tested against a genuinely killed database because that requires infrastructure-level chaos (see Section 10).
+- **Short code generation exhaustion (for/else):** Covered in `test_api.py::TestShorten::test_duplicate_custom_code_returns_409` via the duplicate-code path. The 10-retry `for/else` branch that returns 500 is covered by mocking `generate_short_code` to always return a taken code.
 
 ---
 
@@ -139,7 +148,7 @@ pull_request to main ─►  test job
                          deploy-gate job (needs: test)
 ```
 
-- The `test` job runs pytest with `--cov-fail-under=50`. If coverage drops below 50% or any test fails, the job exits non-zero.
+- The `test` job runs pytest with `--cov-fail-under=70`. If coverage drops below 70% or any test fails, the job exits non-zero.
 - The `deploy-gate` job uses `needs: test`. GitHub Actions will not start a job whose dependencies failed. This is the **gatekeeper** — broken tests block the deploy step from ever running.
 
 ### Why no PostgreSQL service in CI?
@@ -187,3 +196,107 @@ link = Link.create(
 The same fix was applied to `deactivate_link`, which was calling `link.save()` without updating `updated_at` to the current time — semantically wrong (the record changed but the timestamp didn't update).
 
 **Why tests catch what manual testing misses:** SQLite in development mode may or may not enforce NOT NULL depending on how the database was created. PostgreSQL always enforces it. The test suite caught this before it could fail in production.
+
+---
+
+## 7. Known Behavioural Quirks
+
+### Double-deactivate returns 200 (not 404)
+
+`DELETE /links/<code>` fetches the link with `Link.get(Link.short_code == code)`. This query finds the link regardless of its `is_active` status. If you deactivate the same link twice:
+- First call: finds active link → sets `is_active=False` → 200
+- Second call: finds inactive link → sets `is_active=False` again → 200
+
+This is **idempotent** (applying it twice gives the same result) but arguably misleading — the second response implies a change happened. The behaviour is tested and documented in `test_api.py::TestDeactivate::test_double_deactivate_is_idempotent`.
+
+**Implication:** If you want a strict "already deactivated" error, add a check: `if not link.is_active: return jsonify(error="Already deactivated"), 409`.
+
+---
+
+## 8. SQLite vs PostgreSQL Divergence
+
+Tests use SQLite; production uses PostgreSQL. Differences to be aware of:
+
+| Behaviour | SQLite | PostgreSQL |
+|-----------|--------|------------|
+| `CharField(max_length=20)` | Advisory only — longer strings accepted | Enforced — raises error |
+| `DateTimeField` storage | Text (ISO 8601 string) | Native `TIMESTAMP` type |
+| `RETURNING id` after INSERT | `lastrowid` used instead | Native `RETURNING` clause |
+| Concurrent writes | Locks the whole file | Row-level locking |
+| Case-sensitive `LIKE` | Default case-insensitive | Case-sensitive |
+
+**What this means for you:** A test can pass on SQLite but fail on PostgreSQL if it exercises any of the above divergences. The most likely candidate is `max_length` on `short_code`: a client sending a 21-character custom code will pass SQLite tests but fail on PostgreSQL.
+
+---
+
+## 9. Failure Modes
+
+| Trigger | Observed behaviour | HTTP response |
+|---------|--------------------|---------------|
+| Database unreachable at startup | `db.connect()` raises in `before_request`, Flask propagates as unhandled exception | 500 `{"error": "Internal server error"}` |
+| Database dies mid-request | Same as above | 500 |
+| Malformed / non-JSON body on POST /shorten | `get_json(silent=True)` returns `None`, caught by `if not data` check | 400 |
+| Missing `url` key | Caught by `"url" not in data` | 400 |
+| Empty or whitespace URL | Caught by `.strip()` + `if not original_url` | 400 |
+| URL without http/https scheme | Caught by `startswith(("http://", "https://"))` | 400 |
+| Custom `short_code` already taken | Caught by `.exists()` query | 409 |
+| All 10 generated short codes already exist | `for/else` exhaustion path | 500 `{"error": "Could not generate unique short code"}` |
+| `GET /<code>` for non-existent code | `DoesNotExist` caught | 404 |
+| `GET /<code>` for inactive link | `is_active` check | 410 |
+| Route not found | Flask 404 handler | 404 `{"error": "Not found"}` |
+| Wrong HTTP method | Flask 405 handler | 405 `{"error": "Method not allowed"}` |
+| Unhandled exception anywhere | Flask 500 handler | 500 `{"error": "Internal server error"}` |
+
+<img width="471" height="51" alt="Screenshot 2026-04-04 at 21 33 12" src="https://github.com/user-attachments/assets/4c29f1b4-6f05-4b37-87e8-40a870f708ae" />
+
+
+### Gap: no retry on DB failure
+
+The current code has no reconnect logic. If the database becomes temporarily unavailable (brief restart, network blip), every request fails with a 500 until the DB comes back. For production resilience, consider:
+- Connection pooling with `playhouse.pool.PooledPostgresqlDatabase`
+- A retry decorator on `before_request`
+
+---
+
+## 10. Chaos Mode — Docker Restart Policy
+
+**Relevant to:** Gold Tier — "Kill the container → Watch it resurrect."
+
+The `docker-compose.yml` already has `restart: always` on both `app` and `db` services:
+
+```yaml
+services:
+  app:
+    restart: always   # Docker restarts the container if it crashes or is killed
+  db:
+    restart: always
+```
+
+### How to demo chaos mode
+
+```bash
+# Start services
+docker compose up -d
+
+# Find the running app container
+docker ps
+
+# Kill it hard (simulates a crash at 2 AM)
+docker kill <container_id>
+
+# Watch Docker bring it back automatically (usually within 1-2 seconds)
+docker ps
+
+# Verify the app recovered
+curl http://localhost:5000/health
+# → {"status": "ok"}
+```
+<img width="1136" height="659" alt="Screenshot 2026-04-04 at 21 29 15" src="https://github.com/user-attachments/assets/c60c2b96-5cb7-4e81-873e-99b56aed2dfc" />
+
+`restart: always` means Docker restarts the container immediately on any exit, regardless of exit code. This covers:
+- Application crashes (unhandled exceptions that exit the process)
+- OOM kills
+- Manual `docker kill`
+- Host machine reboots (`restart: unless-stopped` would skip that last case)
+
+The `db` service has a healthcheck (`pg_isready`) and the `app` service has `depends_on: db: condition: service_healthy`, so the app won't start until PostgreSQL is actually ready to accept connections — preventing the race condition where the app starts before the DB is up.
