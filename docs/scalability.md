@@ -197,7 +197,7 @@ k6 run tests/load/k6_gold.js
 | Error rate | 0% | ✅ under 5% |
 
 ### Screenshot
-<!-- Add screenshot of k6 gold terminal output here -->
+<img width="1013" height="925" alt="Screenshot 2026-04-05 at 05 06 29" src="https://github.com/user-attachments/assets/4ce31a55-dd3c-4cab-8d81-ec397743d901" />
 
 ---
 
