@@ -11,4 +11,4 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uv", "run", "python", "run.py"]
+CMD ["uv", "run", "gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "run:app"]

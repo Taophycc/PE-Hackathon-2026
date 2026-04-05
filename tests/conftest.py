@@ -27,7 +27,7 @@ def app():
 
     # Patch PostgresqlDatabase so init_db() initialises the proxy with
     # our SQLite instance instead of trying to reach a real Postgres server.
-    with patch("app.database.PostgresqlDatabase") as MockPG:
+    with patch("app.database.PooledPostgresqlDatabase") as MockPG:
         MockPG.return_value = SqliteDatabase(tmp_path)
         from app import create_app
 

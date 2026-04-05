@@ -1,8 +1,30 @@
 services:
-  app:
-    build: .
+  nginx:
+    image: nginx:alpine
     ports:
-      - "8000:8000"
+      - "8000:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app1
+      - app2
+    restart: always
+
+  app1:
+    build: .
+    environment:
+      DATABASE_NAME: hackathon_db
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+  app2:
+    build: .
     environment:
       DATABASE_NAME: hackathon_db
       DATABASE_HOST: db
@@ -20,6 +42,7 @@ services:
       POSTGRES_DB: hackathon_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    command: postgres -c max_connections=200
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
